@@ -1,0 +1,27 @@
+name: Update Reddit Mentions
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Daily at midnight
+  workflow_dispatch: # Allows manual triggering of the workflow
+
+jobs:
+  update_mentions:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '14' # Specify the node version
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Run the update script
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      run: node update_mentions.js
