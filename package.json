@@ -7,9 +7,10 @@
 	},
 	"dependencies": {
 		"@supabase/supabase-js": "^1.0.0",
-		"axios": "^0.21.1",
+		"dayjs": "^1.11.11",
 		"dotenv": "^16.4.5",
-		"p-limit": "^2.3.0"
+		"snoowrap": "^1.23.0",
+		"util": "^0.12.5"
 	},
 	"type": "commonjs"
 }
