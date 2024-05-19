@@ -1,6 +1,8 @@
 const { createClient } = require('@supabase/supabase-js');
-const axios = require('axios');
+const { chromium } = require('playwright');
 const pLimit = require('p-limit');
+const dayjs = require('dayjs');
+
 require('dotenv').config();
 
 
@@ -9,9 +11,6 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Reddit API endpoint for public search
-const redditSearchUrl = 'https://www.reddit.com/search.json';
 
 // Delay function to pause execution for a given number of milliseconds
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -22,40 +21,50 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
  * @returns {Promise<number>} The count of mentions found
  */
 async function getRedditMentions(companyName) {
-  const endTime = Math.floor(Date.now() / 1000);
-  const startTime = endTime - (90 * 24 * 60 * 60); // 90 days ago
-  let mentionsCount = 0;
-  let after = null;
+    const browser = await chromium.launch();
+    const page = await browser.newPage();
+    let mentionsCount = 0;
+    let hasNextPage = true;
+    const startTime = dayjs().subtract(90, 'day');
 
-  while (true) {
-    try {
-      const url = `${redditSearchUrl}?q=${encodeURIComponent(companyName)}&sort=new&type=comment&limit=100&restrict_sr=on&before=${endTime}&after=${startTime}${after ? `&after=${after}` : ''}`;
-      const response = await axios.get(url);
+    await page.goto(`https://www.reddit.com/search/?q=${encodeURIComponent(companyName)}&sort=new&type=comment`);
 
-      const comments = response.data.data.children;
-      mentionsCount += comments.length;
+    while (hasNextPage) {
+        await page.waitForSelector('div[data-testid="comment"]');
 
-      if (!response.data.data.after) {
-        break;
-      }
-      after = response.data.data.after;
+        const comments = await page.$$('div[data-testid="comment"]', nodes => {
+            return nodes.map(n => {
+                const timestampElement = n.querySelector('a[data-click-id="timestamp"] time');
+                const timestamp = timestampElement ? timestampElement.getAttribute('datetime') : null;
+                return {
+                    text: n.innerText,
+                    timestamp: timestamp
+                };
+            })
+        });
 
-      // Respect Reddit's rate limiting by introducing delay
-      await delay(2000); // Adjust based on observed rate limits
+        for (const comment of comments) {
+            if (comment.timestamp && dayjs(comment.timestamp).isBefore(startTime)) {
+                // Stop searching if we find a comment older than 90 days
+                hasNextPage = false;
+                break;
+              }
+              mentionsCount++;
+        }
 
-    } catch (error) {
-        if (error.response && error.response.status === 429) {
-            // HTTP 429: Too Many Requests
-            const retryAfter = error.response.headers['retry-after'] || 60; // Default to retry after 60 seconds
-            console.log(`Rate limited, retrying after ${retryAfter} seconds...`);
-            await delay(retryAfter * 1000);
-        } else {
-            console.error(`Failed to fetch mentions for ${companyName}:`, error);
-            break;
+        if (hasNextPage) {
+            // Check if there's a "Next" button to load more comments
+            const nextButton = await page.$('span.next-button > a'); // Adjust selector based on actual structure
+            if (nextButton) {
+                await nextButton.click();
+                await delay(2000); // Introduce a delay to mimic human interaction
+            } else {
+                hasNextPage = false;
+            }
         }
     }
-  }
-  return mentionsCount;
+    await browser.close();
+    return mentionsCount;
 }
 
 /**
@@ -88,7 +97,7 @@ async function updateMentionsForAllSecurities() {
     return;
   }
 
-  const limit = pLimit(5); // Limit concurrent API calls
+  const limit = pLimit(3); // Limit concurrent API calls
 
   const tasks = data.map((security) =>
     limit(async () => {
