@@ -1,7 +1,13 @@
 const snoowrap = require('snoowrap');
 const { createClient } = require('@supabase/supabase-js');
+<<<<<<< HEAD
 const dayjs = require('dayjs');
 const util = require('util');
+=======
+const { chromium } = require('playwright');
+const pLimit = require('p-limit');
+const dayjs = require('dayjs');
+>>>>>>> origin/main
 
 require('dotenv').config();
 
@@ -11,6 +17,7 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+<<<<<<< HEAD
 const reddit = new snoowrap({
     userAgent: 'Reddit Mention Counter',
     clientId: process.env.REDDIT_CLIENT_ID,
@@ -31,6 +38,62 @@ const fetchCompanyData = async () => {
     console.log(`Fetched ${companies.length} companies from Supabase.`);
     return companies;
 };
+=======
+// Delay function to pause execution for a given number of milliseconds
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Fetch the number of Reddit mentions for a company within the past 90 days
+ * @param {string} companyName - The name to search for in Reddit mentions
+ * @returns {Promise<number>} The count of mentions found
+ */
+async function getRedditMentions(companyName) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage();
+    let mentionsCount = 0;
+    let hasNextPage = true;
+    const startTime = dayjs().subtract(90, 'day');
+
+    await page.goto(`https://www.reddit.com/search/?q=${encodeURIComponent(companyName)}&sort=new&type=comment`);
+
+    while (hasNextPage) {
+        await page.waitForSelector('div[data-testid="comment"]');
+
+        const comments = await page.$$('div[data-testid="comment"]', nodes => {
+            return nodes.map(n => {
+                const timestampElement = n.querySelector('a[data-click-id="timestamp"] time');
+                const timestamp = timestampElement ? timestampElement.getAttribute('datetime') : null;
+                return {
+                    text: n.innerText,
+                    timestamp: timestamp
+                };
+            })
+        });
+
+        for (const comment of comments) {
+            if (comment.timestamp && dayjs(comment.timestamp).isBefore(startTime)) {
+                // Stop searching if we find a comment older than 90 days
+                hasNextPage = false;
+                break;
+              }
+              mentionsCount++;
+        }
+
+        if (hasNextPage) {
+            // Check if there's a "Next" button to load more comments
+            const nextButton = await page.$('span.next-button > a'); // Adjust selector based on actual structure
+            if (nextButton) {
+                await nextButton.click();
+                await delay(2000); // Introduce a delay to mimic human interaction
+            } else {
+                hasNextPage = false;
+            }
+        }
+    }
+    await browser.close();
+    return mentionsCount;
+}
+>>>>>>> origin/main
 
 const getMentions = async (companyName) => {
     console.log(`Fetching mentions for company: ${companyName}`);
@@ -59,10 +122,14 @@ const getMentions = async (companyName) => {
                 }
             });
 
+<<<<<<< HEAD
             after = searchResults.length ? searchResults[searchResults.length - 1].name : null;
             console.log(`Processed batch ${count} for company: ${companyName}, current mentions: ${mentions}`);
             await sleep(2000); // Sleep for 2 seconds between requests to avoid rate limiting
         } while (after && count < 30); // Safeguard to prevent infinite loops
+=======
+  const limit = pLimit(3); // Limit concurrent API calls
+>>>>>>> origin/main
 
         console.log(`Total mentions for ${companyName}: ${mentions}`);
     } catch (error) {
