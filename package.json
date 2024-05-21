@@ -7,7 +7,7 @@
 	},
 	"dependencies": {
 		"@supabase/supabase-js": "^1.0.0",
-		"snoowrap": "^1.25.0",
+		"snoowrap": "^1.23.0",
 		"dayjs": "^1.11.11",
 		"dotenv": "^16.4.5"
 	},
